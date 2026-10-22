@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parní tabulky</title>
+<meta name="description" content="Vlastnosti vody a páry podle IAPWS-IF97">
+<meta name="theme-color" content="#0f3d4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Parní tabulky">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  :root {
+    --bg: #f3f5f6;
+    --card: #ffffff;
+    --ink: #142027;
+    --muted: #63727a;
+    --line: #dfe5e8;
+    --field: #f7f9fa;
+    --accent: #0f6b7e;
+    --accent-ink: #ffffff;
+    --input-bg: #e6f3f5;
+    --input-line: #0f6b7e;
+    --err-bg: #fdecec;
+    --err-ink: #9b1c1c;
+    --warn-bg: #fff6e0;
+    --warn-ink: #7a5300;
+    --liquid: #1f63c6;
+    --wet: #0c8a8a;
+    --vapor: #c25a14;
+    --super: #7b3fb5;
+    --header: #0f3d4a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1418;
+      --card: #162127;
+      --ink: #e7eef1;
+      --muted: #8fa0a8;
+      --line: #26343b;
+      --field: #1b2830;
+      --accent: #3fb3c8;
+      --accent-ink: #062027;
+      --input-bg: #123640;
+      --input-line: #3fb3c8;
+      --err-bg: #3a1717;
+      --err-ink: #ffb3b3;
+      --warn-bg: #3a2e10;
+      --warn-ink: #ffd98a;
+      --liquid: #6aa5ff;
+      --wet: #39c9c3;
+      --vapor: #ff9d5c;
+      --super: #c39cf0;
+      --header: #0a2a33;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  header {
+    background: var(--header); color: #fff;
+    padding: calc(env(safe-area-inset-top) + 14px) 16px 14px;
+  }
+  header .wrap { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: .2px; }
+  header .std { font-size: 12.5px; opacity: .75; }
+  main { padding: 12px 12px calc(env(safe-area-inset-bottom) + 24px); }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  .card { background: var(--card); border-radius: 14px; border: 1px solid var(--line); }
+  .hint { color: var(--muted); font-size: 13.5px; margin: 2px 4px 10px; }
+
+  /* tabulka veličin */
+  .rows { overflow: hidden; }
+  .row {
+    display: grid; grid-template-columns: 1fr 132px 74px; align-items: center; gap: 8px;
+    padding: 7px 10px 7px 12px; border-top: 1px solid var(--line); min-height: 54px;
+  }
+  .row:first-child { border-top: 0; }
+  .lbl { min-width: 0; }
+  .lbl .name { display: block; font-weight: 600; font-size: 15px; }
+  .lbl .sym { font-style: italic; font-family: "Times New Roman", Georgia, serif; font-size: 17px; margin-right: 6px; color: var(--muted); font-weight: 400; }
+  .lbl .tag {
+    display: none; font-size: 10.5px; font-weight: 700; letter-spacing: .6px; color: var(--accent);
+    text-transform: uppercase; margin-top: 1px;
+  }
+  .row.is-input .lbl .tag { display: block; }
+  .row input {
+    width: 100%; height: 40px; border-radius: 9px; border: 1.5px solid var(--line);
+    background: var(--field); color: var(--ink); text-align: right;
+    font: inherit; font-size: 17px; padding: 0 10px; font-variant-numeric: tabular-nums;
+    -webkit-appearance: none; appearance: none; outline: none;
+  }
+  .row input:focus { border-color: var(--accent); }
+  .row.is-input input { background: var(--input-bg); border-color: var(--input-line); font-weight: 600; }
+  .row.computed input { color: var(--ink); }
+  .row.stale input { color: var(--muted); opacity: .55; }
+  .row input::placeholder { color: var(--muted); opacity: .6; }
+  .unit { font-size: 13.5px; color: var(--muted); white-space: nowrap; }
+  .unit select {
+    width: 100%; height: 40px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--field);
+    color: var(--ink); font: inherit; font-size: 14px; padding: 0 6px; -webkit-appearance: none; appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 13px) 17px, calc(100% - 8px) 17px; background-size: 5px 5px; background-repeat: no-repeat;
+    padding-right: 20px;
+  }
+
+  .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 12px 0; }
+  button {
+    font: inherit; border: 0; border-radius: 12px; height: 50px; padding: 0 18px; cursor: pointer;
+    font-weight: 650; font-size: 17px;
+  }
+  .btn-main { background: var(--accent); color: var(--accent-ink); }
+  .btn-main:active { filter: brightness(.92); }
+  .btn-sec { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+
+  .msg { border-radius: 12px; padding: 11px 13px; margin: 0 0 12px; font-size: 14.5px; display: none; }
+  .msg.show { display: block; }
+  .msg.err { background: var(--err-bg); color: var(--err-ink); }
+  .msg.warn { background: var(--warn-bg); color: var(--warn-ink); }
+  .alts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .alts button {
+    height: auto; min-height: 34px; padding: 6px 10px; font-size: 13.5px; font-weight: 600; border-radius: 9px;
+    background: transparent; color: inherit; border: 1.5px solid currentColor; opacity: .7; text-align: left;
+  }
+  .alts button.on { opacity: 1; background: rgba(127,127,127,.15); }
+
+  /* fáze */
+  .phase { display: none; padding: 14px 14px 14px 16px; margin-bottom: 12px; position: relative; overflow: hidden; }
+  .phase.show { display: block; }
+  .phase::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--pc, var(--accent)); }
+  .phase .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .phase .name { font-size: 20px; font-weight: 750; color: var(--pc, var(--ink)); }
+  .phase .chip { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
+  .phase .sub { color: var(--muted); font-size: 14.5px; margin-top: 4px; }
+  .bar { height: 8px; border-radius: 4px; background: rgba(31,99,198,.25); margin-top: 10px; overflow: hidden; display: none; }
+  .bar i { display: block; height: 100%; background: var(--wet); border-radius: 4px; }
+
+  /* další vlastnosti */
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 18px 4px 8px; font-weight: 700; }
+  .extra { display: grid; grid-template-columns: 1fr 1fr; }
+  .extra div { padding: 10px 12px; border-top: 1px solid var(--line); min-width: 0; }
+  .extra div:nth-child(-n+2) { border-top: 0; }
+  .extra div:nth-child(odd) { border-right: 1px solid var(--line); }
+  .extra .k { display: block; font-size: 12.5px; color: var(--muted); }
+  .extra .val { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .extra .val small { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+
+  details { margin-top: 14px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 4px; }
+  details .card { padding: 12px 14px; font-size: 14px; color: var(--muted); }
+  details p { margin: 0 0 8px; }
+  details p:last-child { margin-bottom: 0; }
+  @media (max-width: 370px) {
+    .row { grid-template-columns: 1fr 112px 66px; padding-left: 10px; }
+    .lbl .name { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap"><h1>Parní tabulky</h1><span class="std">IAPWS-IF97 · voda a pára</span></div>
+</header>
+<main>
+  <div class="wrap">
+    <p class="hint">Vyplň libovolné 2 hodnoty a stiskni Spočítat. Vstupem jsou vždy poslední dvě pole, která jsi upravil.</p>
+
+    <div class="card rows" id="rows"></div>
+
+    <div class="actions">
+      <button class="btn-main" id="calc">Spočítat</button>
+      <button class="btn-sec" id="clear">Vymazat</button>
+    </div>
+
+    <div class="msg err" id="err"></div>
+    <div class="msg warn" id="warn"></div>
+
+    <div class="card phase" id="phase">
+      <div class="top"><span class="name" id="phName"></span><span class="chip" id="phRegion"></span></div>
+      <div class="sub" id="phSub"></div>
+      <div class="bar" id="phBar"><i></i></div>
+    </div>
+
+    <div id="extraWrap" style="display:none">
+      <h2>Další vlastnosti</h2>
+      <div class="card extra" id="extra"></div>
+    </div>
+
+    <details>
+      <summary>Jak to funguje a rozsah platnosti</summary>
+      <div class="card">
+        <p>Výpočet podle průmyslové formulace IAPWS-IF97 (oblasti 1 až 5) a zpětných rovnic v(p,T) pro oblast 3. Viskozita podle IAPWS 2008 bez kritického zesílení.</p>
+        <p>Platnost: 0 až 800 °C do 1000 bar, 800 až 2000 °C do 500 bar. V blízkosti kritického bodu (220,64 bar, 373,95 °C) je přesnost IF97 nižší.</p>
+        <p>Mokrou páru nelze určit z tlaku a teploty, protože jsou na mezi sytosti svázané. Použij p nebo t spolu se suchostí x, entalpií nebo entropií.</p>
+        <p>Některé dvojice mohou mít víc řešení (např. teplota + entalpie u stlačené vody). Aplikace pak nabídne všechna nalezená řešení.</p>
+        <p>bar(g) je přetlak vůči 1,01325 bar.</p>
+      </div>
+    </details>
+  </div>
+</main>
+
+<script src="if97.js"></script>
+<script>
+(() => {
+  const PATM = 0.101325; // MPa
+  const P_UNITS = {
+    'bar':    { toSI: x => x / 10,          fromSI: x => x * 10 },
+    'bar(g)': { toSI: x => (x + 1.01325) / 10, fromSI: x => x * 10 - 1.01325 },
+    'MPa':    { toSI: x => x,               fromSI: x => x },
+    'kPa':    { toSI: x => x / 1000,        fromSI: x => x * 1000 }
+  };
+  const T_UNITS = {
+    '°C': { toSI: x => x + 273.15, fromSI: x => x - 273.15 },
+    'K':  { toSI: x => x,          fromSI: x => x }
+  };
+  const FIELDS = [
+    { k: 'p',   sym: 'p', name: 'Tlak',            units: P_UNITS },
+    { k: 'T',   sym: 't', name: 'Teplota',         units: T_UNITS },
+    { k: 'h',   sym: 'h', name: 'Entalpie',        unit: 'kJ/kg' },
+    { k: 's',   sym: 's', name: 'Entropie',        unit: 'kJ/(kg·K)' },
+    { k: 'u',   sym: 'u', name: 'Vnitřní energie', unit: 'kJ/kg' },
+    { k: 'v',   sym: 'v', name: 'Měrný objem',     unit: 'm³/kg' },
+    { k: 'rho', sym: 'ρ', name: 'Hustota',         unit: 'kg/m³' },
+    { k: 'x',   sym: 'x', name: 'Suchost',         unit: '0 až 1' }
+  ];
+
+  // uložené jednotky
+  const store = {
+    get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  const unitSel = { p: store.get('unit_p', 'bar'), T: store.get('unit_T', '°C') };
+  if (!P_UNITS[unitSel.p]) unitSel.p = 'bar';
+  if (!T_UNITS[unitSel.T]) unitSel.T = '°C';
+
+  const $ = id => document.getElementById(id);
+  const rowsEl = $('rows');
+  const el = {};      // k -> {row, input, select}
+  let order = [];     // klíče vstupních polí v pořadí úprav (max 2)
+  let lastResult = null, shown = 0;
+
+  // ---------- formátování čísel (desetinná čárka) ----------
+  function fmt(x, sig = 6) {
+    if (!isFinite(x)) return '';
+    if (x === 0) return '0';
+    const a = Math.abs(x);
+    let s;
+    if (a >= 1e6 || a < 1e-4) s = x.toExponential(sig - 1).replace(/\.?0+e/, 'e');
+    else {
+      const dec = Math.max(0, sig - 1 - Math.floor(Math.log10(a)));
+      s = x.toFixed(Math.min(dec, 10));
+      if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    }
+    return s.replace('.', ',');
+  }
+  function parse(str) {
+    if (str == null) return NaN;
+    const t = String(str).trim().replace(/\s/g, '').replace(',', '.').replace('−', '-');
+    if (t === '' || !/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)) return NaN;
+    return parseFloat(t);
+  }
+
+  // ---------- sestavení tabulky ----------
+  for (const f of FIELDS) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<div class="lbl"><span class="name"><span class="sym">${f.sym}</span>${f.name}</span><span class="tag">vstup</span></div>
+      <input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="${f.name}">
+      <div class="unit"></div>`;
+    const input = row.querySelector('input'), unitBox = row.querySelector('.unit');
+    let select = null;
+    if (f.units) {
+      select = document.createElement('select');
+      select.setAttribute('aria-label', 'Jednotka: ' + f.name);
+      for (const u of Object.keys(f.units)) select.add(new Option(u, u));
+      select.value = unitSel[f.k];
+      unitBox.appendChild(select);
+      select.addEventListener('change', () => changeUnit(f.k, select.value));
+    } else unitBox.textContent = f.unit;
+    input.addEventListener('input', () => onEdit(f.k));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); calculate(); } });
+    rowsEl.appendChild(row);
+    el[f.k] = { row, input, select, f };
+  }
+  updateKeyboard();
+
+  function updateKeyboard() {
+    // bar(g) může být záporný (podtlak): iPhone numerická klávesnice nemá mínus
+    el.p.input.setAttribute('inputmode', unitSel.p === 'bar(g)' ? 'text' : 'decimal');
+  }
+
+  // ---------- logika vstupů ----------
+  function onEdit(k) {
+    const val = el[k].input.value.trim();
+    order = order.filter(x => x !== k);
+    if (val !== '') order.push(k);
+    while (order.length > 2) order.shift();
+    refreshMarks(true);
+  }
+  function refreshMarks(stale) {
+    for (const k in el) {
+      const r = el[k].row, isIn = order.includes(k);
+      r.classList.toggle('is-input', isIn);
+      r.classList.toggle('computed', !isIn);
+      if (stale && !isIn && el[k].input.value) r.classList.add('stale');
+      if (isIn || !stale) r.classList.remove('stale');
+    }
+  }
+
+  function toSI(k, val) {
+    if (k === 'p') return P_UNITS[unitSel.p].toSI(val);
+    if (k === 'T') return T_UNITS[unitSel.T].toSI(val);
+    return val;
+  }
+  function fromSI(k, val) {
+    if (k === 'p') return P_UNITS[unitSel.p].fromSI(val);
+    if (k === 'T') return T_UNITS[unitSel.T].fromSI(val);
+    return val;
+  }
+
+  function changeUnit(k, nu) {
+    const inp = el[k].input, v = parse(inp.value);
+    let si = isFinite(v) ? toSI(k, v) : NaN;
+    unitSel[k] = nu;
+    store.set('unit_' + k, nu);
+    if (isFinite(si)) inp.value = fmt(fromSI(k, si));
+    if (k === 'p') updateKeyboard();
+    if (lastResult && !document.querySelector('.row.stale')) showResult(shown, false);
+  }
+
+  // ---------- výpočet ----------
+  function calculate() {
+    hideMsgs();
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (order.length < 2) { err('Zadej dvě hodnoty. Vstupem jsou poslední dvě upravená pole.'); return; }
+    const inp = {};
+    for (const k of order) {
+      const raw = parse(el[k].input.value);
+      if (!isFinite(raw)) { err(`Hodnota „${el[k].f.name}“ není platné číslo.`); return; }
+      let key = k, val = toSI(k, raw);
+      if (k === 'rho') {
+        if (!(raw > 0)) { err('Hustota musí být kladná.'); return; }
+        key = 'v'; val = 1 / raw;
+      }
+      if (k === 'v' && !(raw > 0)) { err('Měrný objem musí být kladný.'); return; }
+      if (k === 'p' && !(val > 0)) { err('Absolutní tlak musí být kladný.'); return; }
+      if (inp[key] !== undefined) { err('Měrný objem a hustota jsou tatáž veličina. Zadej jinou dvojici.'); return; }
+      inp[key] = val;
+    }
+    try {
+      lastResult = IF97.solve(inp);
+    } catch (e) {
+      lastResult = null;
+      err(e.message || String(e));
+      clearOutputs();
+      return;
+    }
+    showResult(0, true);
+  }
+
+  function showResult(i, first) {
+    shown = i;
+    const all = [lastResult.state, ...lastResult.alternatives];
+    const st = all[i];
+    // vyplnění polí (vstupy zůstanou, jak je uživatel napsal)
+    const vals = { p: st.p, T: st.T, h: st.h, s: st.s, u: st.u, v: st.v, rho: st.rho, x: st.x };
+    for (const k in el) {
+      if (order.includes(k)) continue;
+      const v = vals[k];
+      let txt = '';
+      if (k === 'x') txt = isFinite(v) ? fmt(v, 5) : '';
+      else txt = fmt(fromSI(k, v), k === 'T' ? 6 : 6);
+      el[k].input.value = txt;
+      el[k].input.placeholder = (k === 'x' && !isFinite(v)) ? '—' : '';
+    }
+    refreshMarks(false);
+    renderPhase(st);
+    renderExtra(st);
+    // více řešení
+    if (all.length > 1) {
+      const w = $('warn');
+      w.innerHTML = `Zadání má ${all.length} řešení. Zobrazeno řešení ${i + 1}:<div class="alts"></div>`;
+      const box = w.querySelector('.alts');
+      all.forEach((s, j) => {
+        const b = document.createElement('button');
+        b.textContent = `${j + 1}: ${s.phase}, ${fmt(fromSI('p', s.p), 4)} ${unitSel.p}, ${fmt(fromSI('T', s.T), 5)} ${unitSel.T}`;
+        if (j === i) b.className = 'on';
+        b.addEventListener('click', () => showResult(j, false));
+        box.appendChild(b);
+      });
+      w.classList.add('show');
+    } else $('warn').classList.remove('show');
+  }
+
+  const PHASE_COLOR = { liquid: 'var(--liquid)', wet: 'var(--wet)', vapor: 'var(--vapor)', super: 'var(--super)' };
+  function renderPhase(st) {
+    const ph = $('phase');
+    ph.style.setProperty('--pc', PHASE_COLOR[st.kind] || 'var(--accent)');
+    $('phName').textContent = st.phase;
+    $('phRegion').textContent = 'IF97 oblast ' + st.region;
+    let sub = '';
+    const tU = unitSel.T, pU = unitSel.p;
+    if (st.kind === 'wet') {
+      sub = `x = ${fmt(st.x, 4)} · ${fmt(st.x * 100, 4)} % páry, ${fmt((1 - st.x) * 100, 4)} % kapaliny`;
+    } else if (st.kind === 'vapor' && isFinite(st.dTsat)) {
+      sub = `Přehřátí ${fmt(st.dTsat, 4)} K nad t<sub>sat</sub> = ${fmt(fromSI('T', st.Tsat), 6)} ${tU}`;
+    } else if (st.kind === 'liquid' && isFinite(st.dTsat)) {
+      sub = `Podchlazení ${fmt(st.dTsat, 4)} K pod t<sub>sat</sub> = ${fmt(fromSI('T', st.Tsat), 6)} ${tU}`;
+    } else if (st.kind === 'super') {
+      sub = 'Nad kritickým bodem (220,64 bar, 373,946 °C)';
+    } else if (st.kind === 'liquid') {
+      sub = 'Tlak nad kritickým, teplota pod kritickou';
+    } else if (st.kind === 'vapor') {
+      sub = 'Teplota nad kritickou';
+    }
+    $('phSub').innerHTML = sub;
+    const bar = $('phBar');
+    if (st.kind === 'wet') { bar.style.display = 'block'; bar.firstElementChild.style.width = (st.x * 100) + '%'; }
+    else bar.style.display = 'none';
+    ph.classList.add('show');
+  }
+
+  function renderExtra(st) {
+    const items = [];
+    const tU = unitSel.T, pU = unitSel.p;
+    const add = (k, v, u) => items.push(`<div><span class="k">${k}</span><span class="val">${v}${u ? ' <small>' + u + '</small>' : ''}</span></div>`);
+    const dash = v => isFinite(v) ? v : null;
+    add('Teplota sytosti při p', isFinite(st.Tsat) ? fmt(fromSI('T', st.Tsat)) : '—', isFinite(st.Tsat) ? tU : '');
+    add('Tlak sytosti při t', isFinite(st.psat) ? fmt(fromSI('p', st.psat)) : '—', isFinite(st.psat) ? pU : '');
+    add('Měrná tep. kapacita c<sub>p</sub>', dash(st.cp) !== null ? fmt(st.cp, 5) : '—', dash(st.cp) !== null ? 'kJ/(kg·K)' : '');
+    add('Měrná tep. kapacita c<sub>v</sub>', dash(st.cv) !== null ? fmt(st.cv, 5) : '—', dash(st.cv) !== null ? 'kJ/(kg·K)' : '');
+    add('Izoentropický exponent κ', (isFinite(st.kappa) && st.kind !== 'liquid') ? fmt(st.kappa, 4) : '—', '');
+    add('Rychlost zvuku w', isFinite(st.w) ? fmt(st.w, 5) : '—', isFinite(st.w) ? 'm/s' : '');
+    add('Dynamická viskozita μ', isFinite(st.mu) ? fmt(st.mu * 1e6, 5) : '—', isFinite(st.mu) ? 'µPa·s' : '');
+    add('Kinematická viskozita ν', isFinite(st.mu) ? fmt(st.mu / st.rho * 1e6, 5) : '—', isFinite(st.mu) ? 'mm²/s' : '');
+    if (st.kind === 'wet') {
+      const S = IF97.saturation(st.T);
+      add('Entalpie kapaliny h′', fmt(S.L.h), 'kJ/kg');
+      add('Entalpie páry h″', fmt(S.V.h), 'kJ/kg');
+      add('Výparné teplo r', fmt(S.V.h - S.L.h), 'kJ/kg');
+      add('Objem páry v″', fmt(S.V.v), 'm³/kg');
+    }
+    $('extra').innerHTML = items.join('');
+    $('extraWrap').style.display = 'block';
+  }
+
+  function clearOutputs() {
+    $('phase').classList.remove('show');
+    $('extraWrap').style.display = 'none';
+  }
+  function hideMsgs() { $('err').classList.remove('show'); $('warn').classList.remove('show'); }
+  function err(m) { const e = $('err'); e.textContent = m; e.classList.add('show'); }
+
+  $('calc').addEventListener('click', calculate);
+  $('clear').addEventListener('click', () => {
+    for (const k in el) { el[k].input.value = ''; el[k].input.placeholder = ''; }
+    order = []; lastResult = null;
+    refreshMarks(false); hideMsgs(); clearOutputs();
+  });
+
+  // offline režim
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
